@@ -1,0 +1,82 @@
+# ----------------------------
+# 🔐 Environment / Secrets
+# ----------------------------
+.env
+.env.*
+*.env
+
+# ----------------------------
+# 🐍 Python (Backend)
+# ----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+backend/venv/
+
+# Python build
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# ----------------------------
+# ⚛️ Next.js / Frontend
+# ----------------------------
+node_modules/
+
+.next/
+out/
+
+# Production build
+build/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# ----------------------------
+# 📊 Misc / ML / Uploads
+# ----------------------------
+.ipynb_checkpoints/
+uploads/
+media/
+
+# Large files (optional)
+*.csv
+*.zip
+*.pkl
+*.joblib
+*.h5
+
+# ----------------------------
+# 💻 OS / Editor
+# ----------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ----------------------------
+# 🚀 Misc
+# ----------------------------
+*.bak
+*.swp
