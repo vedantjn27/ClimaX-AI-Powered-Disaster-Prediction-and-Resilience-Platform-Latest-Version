@@ -1,0 +1,89 @@
+# ClimaX — Python Requirements
+# Full consolidated dependency list for the ClimaX backend
+# Install with: pip install -r requirements.txt
+#
+# Python version: 3.11+ recommended
+
+# ─── WEB FRAMEWORK ────────────────────────────────────────────────────────────
+fastapi==0.115.0                # High-performance async REST API framework
+uvicorn[standard]==0.32.0       # ASGI server with WebSocket support
+python-multipart==0.0.9         # File upload / multipart form support
+
+# ─── DATA VALIDATION & SERIALIZATION ─────────────────────────────────────────
+pydantic==2.9.2                 # Schema validation and data modeling
+pydantic-settings==2.5.2        # Settings management via .env files
+
+# ─── ENVIRONMENT & CONFIGURATION ─────────────────────────────────────────────
+python-dotenv==1.0.1            # Load .env variables into os.environ
+
+# ─── HTTP & ASYNC I/O ─────────────────────────────────────────────────────────
+requests==2.32.3                # Synchronous HTTP client (for simple API calls)
+aiohttp==3.10.10                # Async HTTP client (for concurrent API calls)
+aiofiles==24.1.0                # Async file I/O
+
+# ─── NUMERICAL & DATA PROCESSING ─────────────────────────────────────────────
+numpy==2.1.2                    # Numerical computing (QAOA simulation, signal processing)
+pandas==2.2.3                   # Data manipulation and tabular analysis
+scipy==1.14.1                   # Scientific computing (optimization algorithms)
+
+# ─── AI / MACHINE LEARNING ────────────────────────────────────────────────────
+openai==1.51.2                  # OpenAI-compatible client (used for Groq/Granite API)
+transformers==4.45.2            # HuggingFace transformer models (local inference)
+torch==2.4.1                    # PyTorch backend for transformer models
+tokenizers==0.20.1              # Fast tokenization library (HuggingFace)
+sentence-transformers==3.2.1    # Sentence embeddings for RAG retrieval
+faiss-cpu==1.8.0                # Vector similarity search for RAG knowledge base
+
+# ─── COMMUNICATION & ALERTS ──────────────────────────────────────────────────
+twilio==9.3.5                   # SMS alert delivery via Twilio API
+
+# ─── CRYPTOGRAPHY & BLOCKCHAIN ───────────────────────────────────────────────
+cryptography==43.0.3            # RSA key generation, signing, and verification
+pycryptodome==3.21.0            # Additional cryptographic primitives
+
+# ─── VISUALIZATION & REPORTING ───────────────────────────────────────────────
+plotly==5.24.1                  # Interactive charts and server-side graph generation
+matplotlib==3.9.2               # Static chart generation
+pillow==10.4.0                  # Image processing
+
+# ─── VOICE / SPEECH ───────────────────────────────────────────────────────────
+pyttsx3==2.91                   # Text-to-Speech engine (cross-platform)
+SpeechRecognition==3.10.4       # Speech-to-Text (Google Speech API + offline)
+pyaudio==0.2.14                 # Audio I/O for microphone capture
+
+# ─── STATIC FILE SERVING ─────────────────────────────────────────────────────
+# (StaticFiles is part of FastAPI/Starlette — no separate install needed)
+
+# ─── UTILITIES ────────────────────────────────────────────────────────────────
+python-dateutil==2.9.0          # Date parsing and manipulation
+pytz==2024.2                    # Timezone handling
+ujson==5.10.0                   # Ultra-fast JSON serialization
+orjson==3.10.10                 # Fast JSON (used internally by FastAPI)
+httpx==0.27.2                   # Modern async HTTP client (FastAPI test client)
+
+# ─── DEVELOPMENT & TESTING ───────────────────────────────────────────────────
+pytest==8.3.3                   # Test framework
+pytest-asyncio==0.24.0          # Async test support
+pytest-cov==5.0.0               # Test coverage reporting
+httpx==0.27.2                   # HTTP test client for FastAPI
+black==24.10.0                  # Code formatter
+isort==5.13.2                   # Import sorter
+flake8==7.1.1                   # Linting
+
+# ─── PRODUCTION DEPLOYMENT ───────────────────────────────────────────────────
+gunicorn==23.0.0                # Production WSGI/ASGI server
+prometheus-fastapi-instrumentator==7.0.0  # Metrics endpoint for monitoring
+
+# ─── NOTES ────────────────────────────────────────────────────────────────────
+# PyAudio on Linux: sudo apt-get install portaudio19-dev python3-pyaudio
+# PyAudio on macOS: brew install portaudio && pip install pyaudio
+# PyAudio on Windows: pip install pipwin && pipwin install pyaudio
+#
+# PyTorch (torch) for CPU-only (smaller install):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#
+# For GPU inference (CUDA 12.1):
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+# Faiss with GPU support:
+#   pip install faiss-gpu
