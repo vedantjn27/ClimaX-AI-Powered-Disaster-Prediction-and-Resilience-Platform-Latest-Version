@@ -47,9 +47,10 @@ matplotlib==3.9.2               # Static chart generation
 pillow==10.4.0                  # Image processing
 
 # ─── VOICE / SPEECH ───────────────────────────────────────────────────────────
-pyttsx3==2.91                   # Text-to-Speech engine (cross-platform)
-SpeechRecognition==3.10.4       # Speech-to-Text (Google Speech API + offline)
-pyaudio==0.2.14                 # Audio I/O for microphone capture
+gTTS==2.5.1                     # Text-to-Speech via Google TTS HTTP API (no system deps, cloud-ready)
+SpeechRecognition==3.10.4       # Speech-to-Text via Google Web Speech API (file-based, no microphone needed)
+# pyaudio REMOVED — requires PortAudio system library, incompatible with Render/cloud deployments
+# pyttsx3 REMOVED — requires system audio driver, incompatible with headless cloud servers
 
 # ─── STATIC FILE SERVING ─────────────────────────────────────────────────────
 # (StaticFiles is part of FastAPI/Starlette — no separate install needed)
@@ -75,9 +76,11 @@ gunicorn==23.0.0                # Production WSGI/ASGI server
 prometheus-fastapi-instrumentator==7.0.0  # Metrics endpoint for monitoring
 
 # ─── NOTES ────────────────────────────────────────────────────────────────────
-# PyAudio on Linux: sudo apt-get install portaudio19-dev python3-pyaudio
-# PyAudio on macOS: brew install portaudio && pip install pyaudio
-# PyAudio on Windows: pip install pipwin && pipwin install pyaudio
+# Voice Pipeline (Cloud-Compatible Architecture):
+#   - TTS  : gTTS  → pure Python HTTP client to Google TTS; no PortAudio / system audio
+#   - STT  : SpeechRecognition → file-based, calls Google Web Speech API over HTTPS
+#             Browser records audio via MediaRecorder API and POSTs the blob to /api/speech-to-text
+#             No server microphone / PyAudio needed!
 #
 # PyTorch (torch) for CPU-only (smaller install):
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu
