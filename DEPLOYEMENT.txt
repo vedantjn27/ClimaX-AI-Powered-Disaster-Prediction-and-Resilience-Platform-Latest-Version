@@ -1,0 +1,3 @@
+backend : https://climax-ai-powered-disaster-prediction-uuz0.onrender.com
+
+frontend : clima-x-ai-powered-disaster-predict.vercel.app
