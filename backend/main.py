@@ -49,7 +49,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import warnings
 from concurrent.futures import ThreadPoolExecutor
-import pyttsx3
 import threading
 from queue import Queue
 import tempfile
@@ -58,6 +57,13 @@ import aiofiles
 from concurrent.futures import ThreadPoolExecutor
 from fastapi.staticfiles import StaticFiles
 import platform
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("gTTS not installed. TTS will be unavailable. Run: pip install gTTS")
 
 
 citizen_public_keys = {}  # Maps citizen_id -> public key PEM string
@@ -3337,54 +3343,117 @@ async def bot_health_check():
         }
 
 
-# Update your TTS endpoint
+# ==================== VOICE PROCESSOR (Cloud-Compatible) ====================
+# Uses gTTS (Google Text-to-Speech) — pure HTTP-based, no system audio drivers needed.
+# Works on Render, Railway, Heroku, and any Linux/cloud container out of the box.
+
+class VoiceProcessor:
+    """Cloud-compatible TTS using gTTS — no PortAudio / pyaudio / pyttsx3 required."""
+
+    # Maps our internal language codes → BCP-47 tags accepted by gTTS
+    LANG_MAP: Dict[str, str] = {
+        "en": "en",
+        "hi": "hi",
+        "kn": "kn",
+        "te": "te",
+        "ta": "ta",
+        "bn": "bn",
+        "mr": "mr",
+        "gu": "gu",
+        "pa": "pa",
+    }
+
+    def text_to_speech(self, text: str, language: str = "en",
+                       output_file: str = "output.mp3", speed: int = 150) -> bool:
+        """
+        Convert text → audio file using gTTS.
+        Returns True on success, False otherwise.
+        The output is saved as an MP3 (gTTS native format).
+        """
+        if not GTTS_AVAILABLE:
+            logger.error("gTTS is not installed. Run: pip install gTTS")
+            return False
+
+        try:
+            lang_code = self.LANG_MAP.get(language, "en")
+            slow = speed < 120  # gTTS only has normal / slow speed
+
+            tts = gTTS(text=text, lang=lang_code, slow=slow)
+
+            # gTTS always produces MP3 — adjust the extension so browsers play it
+            mp3_path = output_file.replace(".wav", ".mp3")
+            tts.save(mp3_path)
+
+            # If the caller asked for .wav, rename so the rest of the code stays unchanged
+            if output_file != mp3_path and os.path.exists(mp3_path):
+                os.replace(mp3_path, output_file.replace(".wav", ".mp3"))
+
+            logger.info(f"gTTS audio saved to {mp3_path} ({os.path.getsize(mp3_path)} bytes)")
+            return True
+
+        except Exception as e:
+            logger.error(f"gTTS TTS error: {e}")
+            return False
+
+
+# ==================== TTS ENDPOINT (Cloud-Compatible) ====================
 @app.post("/api/text-to-speech")
 async def text_to_speech(request: TTSRequest):
+    """
+    Convert text to speech using gTTS.
+    Returns a URL to the generated MP3 audio file.
+    """
     try:
-        # Generate unique filename
-        audio_filename = f"tts_{uuid.uuid4().hex}.wav"
+        # Generate unique filename — gTTS produces MP3, not WAV
+        audio_filename = f"tts_{uuid.uuid4().hex}.mp3"
         audio_path = os.path.join(AUDIO_DIR, audio_filename)
-        
-        # Your existing TTS generation code, but save to audio_path instead of temp file
+
         voice_processor = VoiceProcessor()
-        
-        # Generate audio and save to the permanent location
         success = voice_processor.text_to_speech(
             text=request.text,
             language=request.language,
-            output_file=audio_path,  # Save directly to permanent location
+            output_file=audio_path,
             speed=request.speed
         )
-        
-        if success and os.path.exists(audio_path):
-            # Return the URL path that can be accessed by the frontend
-            audio_url = f"/audio/{audio_filename}"
-            
+
+        # gTTS saves as .mp3 regardless of the path extension, normalise:
+        mp3_path = audio_path.replace(".wav", ".mp3")
+        final_path = mp3_path if os.path.exists(mp3_path) else audio_path
+        final_filename = os.path.basename(final_path)
+
+        if success and os.path.exists(final_path):
+            audio_url = f"/audio/{final_filename}"
             return {
                 "success": True,
                 "message": "TTS generated successfully",
                 "audio_url": audio_url,
-                "audio_filename": audio_filename
+                "audio_filename": final_filename,
             }
         else:
-            raise HTTPException(status_code=500, detail="TTS generation failed")
-            
+            raise HTTPException(status_code=500, detail="TTS generation failed — gTTS returned no audio")
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"TTS Error: {str(e)}")
+        logger.error(f"TTS Error: {e}")
         raise HTTPException(status_code=500, detail=f"TTS generation failed: {str(e)}")
 
 
 @app.get("/audio/{filename}")
 async def get_audio_file(filename: str):
-    """Serve audio files"""
+    """Serve audio files (MP3 from gTTS or WAV from legacy STT)"""
     file_path = os.path.join(AUDIO_DIR, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Audio file not found")
-    
+
+    # Determine MIME type from file extension
+    ext = os.path.splitext(filename)[1].lower()
+    mime = "audio/mpeg" if ext == ".mp3" else "audio/wav"
+
     return FileResponse(
         file_path,
-        media_type="audio/wav",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        media_type=mime,
+        headers={"Content-Disposition": f"inline; filename={filename}"},
     )
 
 # Optional: Cleanup endpoint to remove old audio files
@@ -3413,27 +3482,35 @@ async def speech_to_text(
     language: str = Form("en")
 ):
     """
-    Convert speech to text
-    
-    - **audio**: Audio file (WAV, MP3, etc.)
-    - **language**: Language code for recognition
+    Convert speech to text — file-upload based (no server microphone needed).
+
+    The browser records audio via the MediaRecorder API and sends the blob here.
+    Supported formats: webm, ogg, wav, mp3 (whatever the browser produces).
+    Recognition is done via the free Google Web Speech HTTP API, which requires
+    no API key and works on any cloud server with outbound internet access.
     """
+    temp_path: Optional[str] = None
     try:
-        # Validate file type
-        allowed_types = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/webm', 'audio/ogg']
-        if audio.content_type not in allowed_types:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Unsupported audio format. Allowed: {', '.join(allowed_types)}"
-            )
-        
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-            content = await audio.read()
-            await aiofiles.open(temp_file.name, 'wb').write(content)
-            temp_path = temp_file.name
-        
-        # Run STT in thread pool
+        content = await audio.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Received empty audio file")
+
+        # Determine a sensible suffix from content-type or filename
+        ct = (audio.content_type or "").lower()
+        if "webm" in ct:
+            suffix = ".webm"
+        elif "ogg" in ct:
+            suffix = ".ogg"
+        elif "mp3" in ct or "mpeg" in ct:
+            suffix = ".mp3"
+        else:
+            suffix = ".wav"  # fallback — sr.AudioFile handles WAV natively
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(content)
+            temp_path = tmp.name
+
+        # Run blocking STT in a thread-pool so the event loop stays free
         loop = asyncio.get_event_loop()
         recognized_text = await loop.run_in_executor(
             executor,
@@ -3441,58 +3518,43 @@ async def speech_to_text(
             temp_path,
             language
         )
-        
-        # Clean up temp file
-        os.unlink(temp_path)
-        
+
         if recognized_text:
             return STTResponse(success=True, text=recognized_text)
         else:
-            return STTResponse(success=False, error="Could not recognize speech")
-            
+            return STTResponse(success=False, error="Could not recognize speech in the audio")
+
+    except HTTPException:
+        raise
     except Exception as e:
-        # Clean up temp file if it exists
-        if 'temp_path' in locals():
+        logger.error(f"STT Error: {e}")
+        raise HTTPException(status_code=500, detail=f"STT Error: {str(e)}")
+    finally:
+        if temp_path and os.path.exists(temp_path):
             try:
                 os.unlink(temp_path)
-            except:
+            except Exception:
                 pass
-        
-        raise HTTPException(status_code=500, detail=f"STT Error: {str(e)}")
+
 
 def perform_speech_recognition(audio_path: str, language: str) -> Optional[str]:
-    """Perform speech recognition in a separate thread"""
+    """
+    Perform Speech Recognition using Groq's fast Whisper API.
+    Supports .webm, .mp3, .wav natively without requiring ffmpeg.
+    """
     try:
-        recognizer = sr.Recognizer()
-        
-        # Language mapping for Google Speech Recognition
-        language_map = {
-            'en': 'en-US',
-            'hi': 'hi-IN',
-            'kn': 'kn-IN',
-            'te': 'te-IN',
-            'ta': 'ta-IN',
-            'bn': 'bn-IN'
-        }
-        
-        with sr.AudioFile(audio_path) as source:
-            # Adjust for ambient noise
-            recognizer.adjust_for_ambient_noise(source, duration=0.5)
-            audio_data = recognizer.record(source)
-        
-        # Recognize speech
-        text = recognizer.recognize_google(
-            audio_data,
-            language=language_map.get(language, 'en-US')
-        )
-        
-        return text
-        
-    except sr.UnknownValueError:
-        return None
-    except sr.RequestError as e:
-        raise Exception(f"Speech recognition service error: {e}")
+        client = make_ai_client()
+        with open(audio_path, "rb") as audio_file:
+            # Groq's Whisper API natively supports webm files
+            transcription = client.audio.transcriptions.create(
+                file=(os.path.basename(audio_path), audio_file.read()),
+                model="whisper-large-v3",
+                response_format="json",
+                language=language if len(language) == 2 else "en"
+            )
+            return transcription.text
     except Exception as e:
+        logger.error(f"Groq Whisper API error: {e}")
         raise Exception(f"Recognition error: {e}")
 
 @app.post("/api/voice-chat")
