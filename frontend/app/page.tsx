@@ -52,7 +52,7 @@ export default function Dashboard() {
   }, [darkMode])
 
   const isDevelopment = process.env.NODE_ENV === "development"
-  const backendUrl = isDevelopment ? "http://localhost:8000" : ""
+  const backendUrl = isDevelopment ? "http://localhost:8000" : "https://climax-ai-powered-disaster-prediction-uuz0.onrender.com"
 
   useEffect(() => {
     const fetchSystemHealth = async () => {
